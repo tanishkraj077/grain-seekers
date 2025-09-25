@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beach Erosion Monitoring</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --header-height: 4rem;
+            --sidebar-width: 22rem;
+        }
+        html {
+            font-size: clamp(14px, 1.2vw, 16px);
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .app-container {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: rgba(255, 255, 255, 0.98);
+            color: #2c3e50;
+            padding: 0 1.5rem;
+            height: var(--header-height);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 0.125rem 1.25rem rgba(0,0,0,0.15);
+            z-index: 1002;
+            flex-shrink: 0;
+            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: -0.5px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1:hover {
+            transform: translateY(-2px);
+            text-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .header h1 i {
+            margin-right: 0.75rem;
+            font-size: 1.5rem;
+        }
+        .header-actions {
+            display: flex;
+            gap: 0.75rem;
+        }
+        .header-actions .floating-btn {
+            min-width: auto;
+            padding: 0.75rem;
+        }
+        .header-actions .floating-btn i {
+            margin-right: 0;
+        }
+        #toggle-view {
+            background: white;
+            color: #333;
+            border: 4px solid rgba(0,0,0,0.08);
+            border-radius: 50%;
+            width: 3.25rem;
+            height: 3.25rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            font-size: 1.6rem;
+            padding: 0;
+        }
+        #toggle-view:hover {
+            transform: translateY(-4px) scale(1.1);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            color: #667eea;
+        }
+        #toggle-view:active {
+            transform: translateY(-1px) scale(1.05);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+            transition: all 0.1s;
+        }
+        .main-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: auto 1fr 0;
+            position: relative;
+            overflow: hidden;
+            transition: grid-template-columns 0.3s ease;
+        }
+        #map {
+            grid-column: 1 / -1;
+            grid-row: 1;
+            height: 100%;
+            transition: all 0.3s ease;
+            z-index: 1;
+        }
+        .ui-panel-left {
+            grid-column: 1;
+            grid-row: 1;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            padding: 0;
+            gap: 1rem;
+            overflow-y: auto;
+            pointer-events: none;
+            margin-top: 1rem;
+            margin-left: 5rem;
+        }
+        .ui-panel-left > * {
+            pointer-events: auto;
+        }
+        .floating-controls {
+            display: flex;
+            flex-direction: row;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 2rem;
+            padding: 0.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .floating-btn {
+            background: rgba(255, 255, 255, 0.95);
+            color: #2c3e50;
+            border: none;
+            border-radius: 50%;
+            width: 3rem;
+            height: 3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            font-weight: 600;
+            backdrop-filter: blur(0.625rem);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .floating-btn:hover {
+            transform: translateY(-3px) scale(1.1);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+            background: white;
+        }
+        .floating-btn.primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        #show-beach-modal, #help-btn {
+            min-width: auto;
+            width: 3rem;
+            height: 3rem;
+            padding: 0;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        #show-beach-modal i, #help-btn i {
+            margin-right: 0;
+            font-size: 1.2rem;
+        }
+        #help-btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #2c3e50;
+        }
+        #help-btn:hover {
+            background: white;
+        }
+        #toggle-sidebar {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            width: 1.75rem;
+            height: 6rem;
+            background: rgba(255, 255, 255, 0.9);
+            color: #2c3e50;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-right: none;
+            border-radius: 0.75rem 0 0 0.75rem;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+            z-index: 1001;
+            align-items: center;
+            justify-content: center;
+            transition: right 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+            padding: 0;
+            display: none;
+        }
+        #toggle-sidebar:hover {
+            background: white;
+            box-shadow: -3px 0 15px rgba(0,0,0,0.15);
+        }
+        #toggle-sidebar i {
+            margin: 0;
+            transition: transform 0.3s ease;
+        }
+        .tile-size-control {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 0.3125rem 1.25rem rgba(0,0,0,0.15);
+            backdrop-filter: blur(0.625rem);
+            border: 1px solid rgba(255,255,255,0.3);
+            margin-bottom: 0.5rem;
+        }
+        .tile-size-control h3 {
+            margin-bottom: 0.5rem;
+            font-size: 0.9375rem;
+            color: #2c3e50;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+        }
+        .tile-size-control h3 i {
+            margin-right: 0.5rem;
+            color: #667eea;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .slider-value {
+            min-width: 4rem;
+            text-align: center;
+            background: #f0f4ff;
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #667eea;
+        }
+        input[type="range"] {
+            flex: 1;
+            height: 0.375rem;
+            border-radius: 0.1875rem;
+            background: #e1e5e9;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.2);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0.125rem 0.5rem rgba(0,0,0,0.2);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 2000;
+            backdrop-filter: blur(0.3125rem);
+        }
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 1.25rem;
+            width: 90%;
+            max-width: 37.5rem;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 1.5625rem 3.125rem rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.4s ease;
+        }
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+        .modal-header {
+            padding: 1.5625rem 1.875rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            font-size: 1.375rem;
+            font-weight: 600;
+        }
+        .close-modal {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        .close-modal:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.1);
+        }
+        .modal-body {
+            padding: 1.875rem;
+            max-height: calc(80vh - 5rem);
+            overflow-y: auto;
+        }
+        .search-container {
+            position: relative;
+            margin-bottom: 1.5625rem;
+        }
+        .search-container i {
+            position: absolute;
+            left: 1.25rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #667eea;
+            z-index: 1;
+        }
+        .search-container input {
+            width: 100%;
+            padding: 0.9375rem 1.25rem 0.9375rem 3.125rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 0.75rem;
+            background-color: white;
+            font-size: 0.9375rem;
+            transition: all 0.3s;
+        }
+        .search-container input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .beach-selection {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.9375rem;
+        }
+        .beach-card {
+            background: white;
+            border-radius: 0.9375rem;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 0.1875rem 0.625rem rgba(0,0,0,0.08);
+            border: 2px solid transparent;
+            display: flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .beach-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 0.25rem;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .beach-card:hover {
+            transform: translateY(-0.3125rem);
+            box-shadow: 0 0.625rem 1.5625rem rgba(0,0,0,0.15);
+            border-color: #667eea;
+        }
+        .beach-card:hover::before {
+            opacity: 1;
+        }
+        .beach-card.active {
+            border-color: #667eea;
+            background: #f8fafc;
+        }
+        .beach-card.active::before {
+            opacity: 1;
+        }
+        .beach-icon {
+            font-size: 1.75rem;
+            color: #667eea;
+            margin-right: 1.25rem;
+            width: 3.125rem;
+            height: 3.125rem;
+            background: linear-gradient(135deg, #f0f4ff, #e8edff);
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .beach-info {
+            flex: 1;
+        }
+        .beach-name {
+            font-weight: 700;
+            color: #2c3e50;
+            font-size: 1rem;
+            margin-bottom: 0.3125rem;
+        }
+        .beach-location {
+            font-size: 0.875rem;
+            color: #666;
+        }
+        .beach-stats {
+            display: flex;
+            gap: 0.9375rem;
+        }
+        .stat-badge {
+            background: #f0f4ff;
+            color: #667eea;
+            padding: 0.25rem 0.625rem;
+            border-radius: 1.25rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .beach-details-panel {
+            grid-column: 3;
+            grid-row: 1;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem;
+            box-shadow: 0 0.9375rem 2.1875rem rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: var(--sidebar-width);
+            backdrop-filter: blur(0.625rem);
+            border-left: 1px solid rgba(255,255,255,0.3);
+            animation: slideInRight 0.4s ease;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(6.25rem);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .beach-details-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #f0f4ff;
+        }
+        .beach-details-icon {
+            font-size: 1.75rem;
+            color: #667eea;
+            margin-right: 0.75rem;
+        }
+        .beach-details-title {
+            flex: 1;
+        }
+        .beach-details-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.25rem;
+        }
+        .beach-details-coords {
+            font-size: 0.8rem;
+            color: #666;
+        }
+        .close-details {
+            background: #f0f4ff;
+            border: none;
+            color: #667eea;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        .close-details:hover {
+            background: #667eea;
+            color: white;
+        }
+        .beach-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 0.75rem 0.5rem;
+            background: linear-gradient(135deg, #f8faff, #f0f4ff);
+            border-radius: 0.75rem;
+            border-left: 0.25rem solid #667eea;
+        }
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 0.25rem;
+        }
+        .stat-label {
+            font-size: 0.7rem;
+            color: #666;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.0313rem;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .control-group h3 {
+            color: #2c3e50;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        .control-group h3 i {
+            margin-right: 0.625rem;
+            color: #667eea;
+            width: 1.25rem;
+            text-align: center;
+        }
+        
+        /* --- MODIFIED: Styles for the new toggle buttons --- */
+        .mode-toggle-container {
+            display: flex;
+            background-color: #f0f2f5;
+            border-radius: 0.625rem;
+            padding: 0.25rem;
+            margin-bottom: 0.75rem;
+            border: 1px solid #e1e5e9;
+        }
+        .mode-toggle-btn {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid transparent; /* Add transparent border for layout consistency */
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+            background-color: white; /* Default to white background */
+            color: #333;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); /* Subtle shadow for inactive */
+        }
+        .mode-toggle-btn.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            border-color: transparent; /* Remove border for active state */
+        }
+        /* Style for the non-active button */
+        .mode-toggle-btn:not(.active) {
+            background: white;
+            color: #333;
+            border-color: #e1e5e9;
+        }
+        /* --- END OF MODIFICATION --- */
+
+        select, .control-group button {
+            width: 100%;
+            padding: 0.65rem 0.85rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 0.625rem;
+            background-color: white;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+        }
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .control-group button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 0.25rem;
+        }
+        .control-group button i {
+            margin-right: 0.5rem;
+        }
+        .control-group button:hover {
+            transform: translateY(-0.125rem);
+            box-shadow: 0 0.3125rem 0.9375rem rgba(102, 126, 234, 0.4);
+        }
+        .control-group button:disabled {
+            background: #b0b0b0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.6;
+        }
+        .legend {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 1rem;
+            border-radius: 0.9375rem;
+            box-shadow: 0 0.625rem 1.5625rem rgba(0,0,0,0.15);
+            backdrop-filter: blur(0.625rem);
+            border: 1px solid rgba(255,255,255,0.3);
+            min-width: 13.75rem;
+            z-index: 999;
+            display: none;
+            transition: opacity 0.3s ease;
+        }
+        .legend h3 {
+            margin-bottom: 0.75rem;
+            font-size: 0.9375rem;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 0.8125rem;
+        }
+        .legend-color {
+            width: 1.375rem;
+            height: 1.375rem;
+            margin-right: 0.75rem;
+            border-radius: 0.3125rem;
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+        .tile-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 0.625rem;
+            font-size: 0.8125rem;
+            z-index: 3000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            backdrop-filter: blur(0.625rem);
+            border: 1px solid rgba(255,255,255,0.2);
+            max-width: 15.625rem;
+            box-shadow: 0 0.625rem 1.5625rem rgba(0,0,0,0.3);
+        }
+        .tile-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -0.5rem;
+            border-width: 0.5rem;
+            border-style: solid;
+            border-color: rgba(0,0,0,0.85) transparent transparent transparent;
+        }
+        .tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.375rem;
+            padding-bottom: 0.375rem;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        .tooltip-row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .tooltip-label {
+            font-weight: 600;
+            color: #ccc;
+        }
+        .tooltip-value {
+            color: white;
+            font-weight: 500;
+        }
+        .tooltip-positive {
+            color: #ff6b6b;
+        }
+        .tooltip-negative {
+            color: #51cf66;
+        }
+        .beach-marker {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 3.125rem;
+            height: 3.125rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+            box-shadow: 0 0.3125rem 1.25rem rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .beach-marker:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0.5rem 1.5625rem rgba(0,0,0,0.4);
+        }
+        .beach-marker.active {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            transform: scale(1.2);
+        }
+        .loading {
+            text-align: center;
+            padding: 2.5rem 1.25rem;
+            color: #666;
+        }
+        .loading i {
+            font-size: 2rem;
+            margin-bottom: 0.9375rem;
+            color: #667eea;
+        }
+        .error {
+            color: #e74c3c;
+            padding: 0.9375rem;
+            background: #ffeaea;
+            border-radius: 0.625rem;
+            margin-bottom: 0.9375rem;
+            border-left: 0.25rem solid #e74c3c;
+            font-size: 0.875rem;
+        }
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .ui-panel-left {
+                position: absolute;
+                padding: 1rem;
+                background: rgba(255,255,255,0.1);
+                backdrop-filter: blur(5px);
+                max-height: calc(100% - 2rem);
+            }
+            .beach-details-panel {
+                width: 100%;
+                grid-column: 1;
+            }
+            .legend {
+                position: absolute;
+                bottom: 1rem;
+                left: 1rem;
+                width: calc(100% - 2rem);
+            }
+            #toggle-view {
+                padding: 0.7rem 1.2rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <div class="header-left">
+                <h1 id="app-title"><i class="fas fa-water"></i> Coastal Analytics</h1>
+                <button id="toggle-view" title="Home">
+                    🏠
+                </button>
+            </div>
+            <div class="header-actions">
+                </div>
+        </div>
+        <div class="main-content">
+            <button id="toggle-sidebar" title="Show Sidebar">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="ui-panel-left">
+                <div class="floating-controls">
+                    <button class="floating-btn primary" id="show-beach-modal" title="Select Beach">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <button class="floating-btn" id="help-btn" title="How to Use">
+                        <i class="fas fa-question-circle"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="map"></div>
+            <div class="beach-details-panel" id="beach-details-panel" style="display: none;">
+                <div class="beach-details-header">
+                    <i class="fas fa-umbrella-beach beach-details-icon"></i>
+                    <div class="beach-details-title">
+                        <div class="beach-details-name" id="beach-info-name">Beach Name</div>
+                        <div class="beach-details-coords" id="beach-info-coords">Latitude, Longitude</div>
+                    </div>
+                    <button class="close-details" id="close-beach-details">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="beach-stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="info-run-count">0</div>
+                        <div class="stat-label">Survey Runs</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="info-sample-count">0</div>
+                        <div class="stat-label">Samples</div>
+                    </div>
+                </div>
+                
+                <div class="tile-size-control">
+                    <h3><i class="fas fa-th-large"></i> Tile Size</h3>
+                    <div class="slider-container">
+                        <span class="slider-value" id="tile-size-value">0.0004°</span>
+                        <input type="range" id="tile-size-slider" min="1" max="10" value="5" step="1">
+                    </div>
+                    <small style="color: #666; margin-top: 0.5rem; display: block;">
+                        Adjust the granularity of the analysis grid
+                    </small>
+                </div>
+
+                <div class="control-group">
+                    <h3><i class="fas fa-analytics"></i> Survey Data Analysis</h3>
+                    <div class="mode-toggle-container">
+                        <button id="mode-compare-btn" class="mode-toggle-btn active">Compare</button>
+                        <button id="mode-view-btn" class="mode-toggle-btn">View</button>
+                    </div>
+                    <select id="run1-selector">
+                        <option value="">Select survey</option>
+                    </select>
+                    <select id="run2-selector">
+                        <option value="">Select comparison survey</option>
+                    </select>
+                    <select id="metric-selector">
+                        <option value="avgArea">Grain Area Analysis (mm²)</option>
+                        <option value="avgDiameter">Grain Size Analysis (mm)</option>
+                    </select>
+                    <button id="analysis-btn" disabled>
+                        <i class="fas fa-chart-line"></i> Analyze Changes
+                    </button>
+                </div>
+
+            </div>
+            <div class="legend" id="erosion-legend">
+                <h3>Erosion Change Intensity</h3>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #2c7bb6;"></div>
+                    <span>Significant Decrease (>20%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #abd9e9;"></div>
+                    <span>Moderate Decrease (0-20%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ffffbf;"></div>
+                    <span>Stable Conditions</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #fdae61;"></div>
+                    <span>Moderate Increase (0-20%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #d7191c;"></div>
+                    <span>Significant Increase (>20%)</span>
+                </div>
+            </div>
+
+            <div class="legend" id="view-legend">
+                <h3>Grain Size Intensity</h3>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ffffd9;"></div>
+                    <span>Very Small</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #edf8b1;"></div>
+                    <span>Small</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #c7e9b4;"></div>
+                    <span>Medium</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #7fcdbb;"></div>
+                    <span>Large</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #2c7fb8;"></div>
+                    <span>Very Large</span>
+                </div>
+            </div>
+
+            <div class="modal" id="beach-modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-map-marked-alt"></i> Select a Beach to Analyze</h2>
+                        <button class="close-modal" id="close-modal">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="search-container">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="beach-search" placeholder="Search beaches by name...">
+                        </div>
+                        <div class="beach-selection" id="beach-selection">
+                            <div class="loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <div>Loading coastal monitoring sites...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tile-tooltip" id="tile-tooltip"></div>
+        </div>
+    </div>
+    <script>
+        // Global variables
+        let map = null;
+        let beachData = null;
+        let currentTiles = [];
+        let tileData = {};
+        let beachMarkers = [];
+        let selectedBeachId = null;
+        let hoveredTile = null;
+        let isSidebarOpen = false;
+        let currentAnalysisMode = 'compare'; // 'compare' or 'view'
+        const API_BASE = 'http://localhost:5000/api';
+        
+        let currentTileSize = 0.0004;
+        const TILE_SIZE_MIN = 0.0002;
+        const TILE_SIZE_MAX = 0.0010;
+        let rawLocationData = [];
+        
+        // DOM element references
+        const beachDetailsPanel = document.getElementById('beach-details-panel');
+        const mainContent = document.querySelector('.main-content');
+        const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+        const tileSizeSlider = document.getElementById('tile-size-slider');
+        const tileSizeValue = document.getElementById('tile-size-value');
+        const appTitle = document.getElementById('app-title');
+        const erosionLegend = document.getElementById('erosion-legend');
+        const viewLegend = document.getElementById('view-legend');
+        const toggleViewBtn = document.getElementById('toggle-view');
+        
+        // Initialize the application
+        function init() {
+            initMap();
+            setupEventListeners();
+            loadBeaches();
+            setupTileSizeSlider();
+            setAnalysisMode('compare'); // Set initial mode
+        }
+        
+        function setupTileSizeSlider() {
+            tileSizeSlider.addEventListener('input', function() {
+                updateTileSizeDisplay(this.value);
+                applyNewTileSize();
+            });
+            updateTileSizeDisplay(tileSizeSlider.value);
+        }
+        
+        function updateTileSizeDisplay(sliderValue) {
+            const minLog = Math.log10(TILE_SIZE_MIN);
+            const maxLog = Math.log10(TILE_SIZE_MAX);
+            const logValue = minLog + (maxLog - minLog) * ((sliderValue - 1) / 9);
+            const newTileSize = Math.pow(10, logValue);
+            tileSizeValue.textContent = newTileSize.toFixed(4) + '°';
+        }
+        
+        function applyNewTileSize() {
+            const sliderValue = tileSizeSlider.value;
+            const minLog = Math.log10(TILE_SIZE_MIN);
+            const maxLog = Math.log10(TILE_SIZE_MAX);
+            const logValue = minLog + (maxLog - minLog) * ((sliderValue - 1) / 9);
+            currentTileSize = Math.pow(10, logValue);
+            
+            if (selectedBeachId && rawLocationData.length > 0) {
+                processDataIntoTiles(currentTileSize);
+                runAnalysis();
+            }
+        }
+        
+        function initMap() {
+            map = L.map('map').setView([12.35, 77.13], 5);
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri'
+            }).addTo(map);
+            map.on('click', () => { if (isSidebarOpen) { toggleSidebar(); } });
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('show-beach-modal').addEventListener('click', showBeachModal);
+            document.getElementById('close-modal').addEventListener('click', hideBeachModal);
+            document.getElementById('close-beach-details').addEventListener('click', clearBeachSelection);
+            document.getElementById('beach-search').addEventListener('input', (e) => filterBeaches(e.target.value));
+            
+            document.getElementById('analysis-btn').addEventListener('click', runAnalysis);
+            
+            document.getElementById('mode-compare-btn').addEventListener('click', () => setAnalysisMode('compare'));
+            document.getElementById('mode-view-btn').addEventListener('click', () => setAnalysisMode('view'));
+
+            toggleViewBtn.addEventListener('click', clearBeachSelection);
+            document.getElementById('help-btn').addEventListener('click', showHelp);
+            toggleSidebarBtn.addEventListener('click', toggleSidebar);
+            appTitle.addEventListener('click', clearBeachSelection);
+            
+            document.getElementById('beach-modal').addEventListener('click', function(e) {
+                if (e.target === this) { hideBeachModal(); }
+            });
+        }
+
+        function setAnalysisMode(mode) {
+            currentAnalysisMode = mode;
+            const compareBtn = document.getElementById('mode-compare-btn');
+            const viewBtn = document.getElementById('mode-view-btn');
+            const run2Selector = document.getElementById('run2-selector');
+            const run1Selector = document.getElementById('run1-selector');
+            const analysisBtn = document.getElementById('analysis-btn');
+
+            if (mode === 'compare') {
+                compareBtn.classList.add('active');
+                viewBtn.classList.remove('active');
+                run2Selector.style.display = 'block';
+                run1Selector.querySelector('option').textContent = 'Select baseline survey';
+                analysisBtn.innerHTML = '<i class="fas fa-chart-line"></i> Analyze Changes';
+                if (isSidebarOpen) {
+                    erosionLegend.style.display = 'block';
+                    viewLegend.style.display = 'none';
+                }
+            } else { // mode === 'view'
+                viewBtn.classList.add('active');
+                compareBtn.classList.remove('active');
+                run2Selector.style.display = 'none';
+                run1Selector.querySelector('option').textContent = 'Select survey to view';
+                analysisBtn.innerHTML = '<i class="fas fa-eye"></i> View Data';
+                if (isSidebarOpen) {
+                    erosionLegend.style.display = 'none';
+                    viewLegend.style.display = 'block';
+                }
+            }
+            clearTiles();
+        }
+        
+        function toggleSidebar() {
+            isSidebarOpen = !isSidebarOpen;
+            
+            if (isSidebarOpen) {
+                mainContent.style.gridTemplateColumns = 'auto 1fr var(--sidebar-width)';
+                toggleSidebarBtn.style.right = 'var(--sidebar-width)';
+                toggleSidebarBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+                if (currentAnalysisMode === 'compare') {
+                    erosionLegend.style.display = 'block';
+                } else {
+                    viewLegend.style.display = 'block';
+                }
+            } else {
+                mainContent.style.gridTemplateColumns = 'auto 1fr 0';
+                toggleSidebarBtn.style.right = '0';
+                toggleSidebarBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+                erosionLegend.style.display = 'none';
+                viewLegend.style.display = 'none';
+            }
+        }
+        
+        function showAnalysisPanel() {
+            beachDetailsPanel.style.display = 'flex';
+            toggleSidebarBtn.style.display = 'flex';
+            if (!isSidebarOpen) {
+                toggleSidebar();
+            }
+        }
+        
+        function hideAnalysisPanel() {
+            if (isSidebarOpen) {
+                toggleSidebar();
+            }
+            beachDetailsPanel.style.display = 'none';
+            toggleSidebarBtn.style.display = 'none';
+        }
+        
+        function showHelp() {
+            alert('How to use Coastal Analytics:\n\n1. Select a monitoring site.\n2. Choose an analysis mode: "Compare" or "View".\n3. Select survey dates from the dropdowns.\n4. Adjust tile size for granularity.\n5. Click the button to visualize data on the map.');
+        }
+        
+        function showBeachModal() { document.getElementById('beach-modal').style.display = 'block'; }
+        function hideBeachModal() { document.getElementById('beach-modal').style.display = 'none'; }
+        
+        function clearTiles() {
+            currentTiles.forEach(tile => map.removeLayer(tile));
+            currentTiles = [];
+        }
+
+        function clearBeachSelection() {
+            if (!selectedBeachId) return;
+            selectedBeachId = null;
+            
+            beachMarkers.forEach(marker => marker.getElement()?.classList.remove('active'));
+            clearTiles();
+            hideAnalysisPanel();
+            
+            if (beachMarkers.length > 0) {
+                const group = new L.featureGroup(beachMarkers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+        
+        async function loadBeaches() {
+            try {
+                const response = await fetch(`${API_BASE}/beaches`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const beaches = await response.json();
+                displayBeaches(beaches);
+                addBeachMarkersToMap(beaches);
+            } catch (error) {
+                showError('Failed to load beaches. Please check if the server is running.');
+            }
+        }
+        
+        function displayBeaches(beaches) {
+            const beachSelection = document.getElementById('beach-selection');
+            beachSelection.innerHTML = '';
+            if (beaches.length === 0) {
+                beachSelection.innerHTML = '<div class="error">No sites found</div>';
+                return;
+            }
+            beaches.forEach(beach => {
+                const beachCard = document.createElement('div');
+                beachCard.className = 'beach-card';
+                beachCard.setAttribute('data-beach-id', beach._id);
+                beachCard.innerHTML = `<div class="beach-icon"><i class="fas fa-umbrella-beach"></i></div><div class="beach-info"><div class="beach-name">${beach.name}</div><div class="beach-location">${beach.lat?.toFixed(4)}, ${beach.lon?.toFixed(4)}</div></div>`;
+                beachCard.addEventListener('click', () => {
+                    selectBeach(beach._id, beach);
+                    hideBeachModal();
+                });
+                beachSelection.appendChild(beachCard);
+            });
+        }
+        
+        function addBeachMarkersToMap(beaches) {
+            beachMarkers.forEach(marker => map.removeLayer(marker));
+            beachMarkers = [];
+            beaches.forEach(beach => {
+                if (beach.lat && beach.lon) {
+                    const icon = L.divIcon({ className: 'beach-marker', html: '<i class="fas fa-umbrella-beach"></i>', iconSize: [50, 50], iconAnchor: [25, 25] });
+                    const marker = L.marker([beach.lat, beach.lon], { icon }).addTo(map);
+                    marker.bindPopup(`<b>${beach.name}</b>`);
+                    marker.beachId = beach._id;
+                    marker.beachData = beach;
+                    marker.on('click', (e) => { selectBeach(beach._id, beach); L.DomEvent.stopPropagation(e); });
+                    beachMarkers.push(marker);
+                }
+            });
+            if (beachMarkers.length > 0) {
+                const group = new L.featureGroup(beachMarkers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+        
+        function filterBeaches(searchTerm) {
+            document.querySelectorAll('.beach-card').forEach(card => {
+                const name = card.querySelector('.beach-name').textContent.toLowerCase();
+                card.style.display = name.includes(searchTerm.toLowerCase()) ? 'flex' : 'none';
+            });
+        }
+        
+        async function selectBeach(beachId, beachData = null) {
+            if (!beachData) {
+                const marker = beachMarkers.find(m => m.beachId === beachId);
+                beachData = marker ? marker.beachData : null;
+            }
+            
+            showAnalysisPanel();
+            
+            if (beachData) {
+                document.getElementById('beach-info-name').textContent = beachData.name;
+                document.getElementById('beach-info-coords').textContent = `${beachData.lat?.toFixed(4)}, ${beachData.lon?.toFixed(4)}`;
+                map.setView([beachData.lat, beachData.lon], 15);
+            }
+            
+            beachMarkers.forEach(marker => marker.getElement()?.classList.toggle('active', marker.beachId === beachId));
+            
+            await loadBeachData(beachId);
+            selectedBeachId = beachId;
+            setTimeout(runDefaultAnalysis, 500);
+        }
+        
+        async function loadBeachData(beachId) {
+            try {
+                document.getElementById('info-run-count').textContent = '...';
+                document.getElementById('info-sample-count').textContent = '...';
+                document.getElementById('analysis-btn').disabled = true;
+                
+                const response = await fetch(`${API_BASE}/runs/${beachId}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                beachData = await response.json();
+                if (beachData.error) throw new Error(beachData.error);
+                
+                let totalSamples = 0;
+                rawLocationData = [];
+                if (beachData.runs) {
+                    document.getElementById('info-run-count').textContent = beachData.runs.length;
+                    beachData.runs.forEach(run => {
+                        run.locations?.forEach(location => {
+                            totalSamples += location.grains?.length || 0;
+                            rawLocationData.push({ runId: run.operation_id, lat: Number(location.lat), lon: Number(location.lon), grains: location.grains || [] });
+                        });
+                    });
+                    document.getElementById('info-sample-count').textContent = totalSamples;
+                }
+                
+                updateRunSelectors();
+                
+                if (beachData.runs && beachData.runs.length >= 1) {
+                    document.getElementById('analysis-btn').disabled = false;
+                    document.getElementById('run1-selector').value = beachData.runs[0].operation_id;
+                    if (beachData.runs.length >= 2) {
+                        document.getElementById('run2-selector').value = beachData.runs[1].operation_id;
+                    }
+                    processDataIntoTiles(currentTileSize);
+                } else {
+                    showError('Not enough survey data available for analysis.');
+                }
+            } catch (error) {
+                showError(`Failed to load site data: ${error.message}`);
+            }
+        }
+        
+        function updateRunSelectors() {
+            const run1Selector = document.getElementById('run1-selector');
+            const run2Selector = document.getElementById('run2-selector');
+            run1Selector.innerHTML = '<option value="">Select survey</option>';
+            run2Selector.innerHTML = '<option value="">Select comparison survey</option>';
+            
+            if (!beachData.runs) return;
+            
+            beachData.runs.forEach(run => {
+                const optionHTML = `<option value="${run.operation_id}">${run.date} ${run.time}</option>`;
+                run1Selector.innerHTML += optionHTML;
+                run2Selector.innerHTML += optionHTML;
+            });
+        }
+        
+        function processDataIntoTiles(tileSize) {
+            tileData = {};
+            clearTiles();
+            if (rawLocationData.length === 0) return;
+
+            let originLat = beachData.start_lat ?? rawLocationData[0].lat;
+            let originLon = beachData.start_lon ?? rawLocationData[0].lon;
+            
+            rawLocationData.forEach(location => {
+                const lat = location.lat, lon = location.lon;
+                if (!isFinite(lat) || !isFinite(lon)) return;
+                const tileX = Math.floor((lat - originLat) / tileSize);
+                const tileY = Math.floor((lon - originLon) / tileSize);
+                const key = `${tileX},${tileY}`;
+
+                if (!tileData[key]) {
+                    tileData[key] = { x: tileX, y: tileY, lat: originLat + tileX * tileSize, lon: originLon + tileY * tileSize, runs: {} };
+                }
+                if (!tileData[key].runs[location.runId]) {
+                    tileData[key].runs[location.runId] = { avgArea: 0, avgDiameter: 0, count: 0 };
+                }
+                
+                const grains = location.grains || [];
+                const locationAvgArea = grains.length > 0 ? grains.reduce((s, g) => s + (g.area || 0), 0) / grains.length : 0;
+                const locationAvgDiameter = grains.length > 0 ? grains.reduce((s, g) => s + (g.diameter || 0), 0) / grains.length : 0;
+                
+                const tileRun = tileData[key].runs[location.runId];
+                tileRun.avgArea += locationAvgArea;
+                tileRun.avgDiameter += locationAvgDiameter;
+                tileRun.count += 1;
+            });
+            
+            Object.values(tileData).forEach(tile => {
+                Object.values(tile.runs).forEach(run => {
+                    if (run.count > 0) {
+                        run.avgArea /= run.count;
+                        run.avgDiameter /= run.count;
+                    }
+                });
+            });
+        }
+        
+        function runDefaultAnalysis() {
+            if (!document.getElementById('run1-selector').value) return;
+            runAnalysis();
+        }
+
+        function runAnalysis() {
+            clearTiles();
+            if (currentAnalysisMode === 'compare') {
+                compareRuns();
+            } else {
+                viewRun();
+            }
+        }
+        
+        function compareRuns() {
+            const run1Id = document.getElementById('run1-selector').value;
+            const run2Id = document.getElementById('run2-selector').value;
+            const metric = document.getElementById('metric-selector').value;
+            
+            if (!run1Id || !run2Id) {
+                alert('Please select two survey runs to compare.');
+                return;
+            }
+            
+            Object.values(tileData).forEach(tile => {
+                const run1Data = tile.runs[run1Id];
+                const run2Data = tile.runs[run2Id];
+                const bounds = L.latLngBounds([[tile.lat, tile.lon], [tile.lat + currentTileSize, tile.lon + currentTileSize]]);
+                
+                let color = '#aaaaaa', opacity = 0.3;
+                
+                if (run1Data && run2Data) {
+                    const value1 = run1Data[metric], value2 = run2Data[metric];
+                    const changePercent = value1 !== 0 ? ((value2 - value1) / value1) * 100 : 0;
+                    
+                    if (changePercent < -20) color = '#2c7bb6';
+                    else if (changePercent < 0) color = '#abd9e9';
+                    else if (changePercent === 0) color = '#ffffbf';
+                    else if (changePercent <= 20) color = '#fdae61';
+                    else color = '#d7191c';
+                    opacity = 0.7;
+                }
+                
+                const tileRect = L.rectangle(bounds, { fillColor: color, fillOpacity: opacity, weight: 0 }).addTo(map);
+                if (run1Data && run2Data) {
+                    tileRect.on('mouseover', (e) => showTileTooltip(e, tile, run1Id, run2Id, metric));
+                    tileRect.on('mousemove', moveTileTooltip);
+                    tileRect.on('mouseout', hideTileTooltip);
+                }
+                currentTiles.push(tileRect);
+            });
+        }
+
+        function viewRun() {
+            const runId = document.getElementById('run1-selector').value;
+            const metric = document.getElementById('metric-selector').value;
+            if (!runId) {
+                alert('Please select a survey to view.');
+                return;
+            }
+
+            const values = Object.values(tileData)
+                .map(tile => tile.runs[runId]?.[metric])
+                .filter(val => val !== undefined);
+            
+            if (values.length === 0) return;
+
+            const maxVal = Math.max(...values);
+            const minVal = Math.min(...values);
+
+            Object.values(tileData).forEach(tile => {
+                const runData = tile.runs[runId];
+                const bounds = L.latLngBounds([[tile.lat, tile.lon], [tile.lat + currentTileSize, tile.lon + currentTileSize]]);
+                
+                let color = '#aaaaaa', opacity = 0.3;
+
+                if (runData) {
+                    const value = runData[metric];
+                    const percentile = (maxVal > minVal) ? (value - minVal) / (maxVal - minVal) : 0.5;
+
+                    if (percentile < 0.2) color = '#ffffd9';
+                    else if (percentile < 0.4) color = '#edf8b1';
+                    else if (percentile < 0.6) color = '#c7e9b4';
+                    else if (percentile < 0.8) color = '#7fcdbb';
+                    else color = '#2c7fb8';
+                    opacity = 0.7;
+                }
+
+                const tileRect = L.rectangle(bounds, { fillColor: color, fillOpacity: opacity, weight: 0 }).addTo(map);
+                if (runData) {
+                    tileRect.on('mouseover', (e) => showTileTooltip(e, tile, runId, null, metric));
+                    tileRect.on('mousemove', moveTileTooltip);
+                    tileRect.on('mouseout', hideTileTooltip);
+                }
+                currentTiles.push(tileRect);
+            });
+        }
+        
+        function showTileTooltip(e, tile, run1Id, run2Id, metric) {
+            const tooltip = document.getElementById('tile-tooltip');
+            const unit = metric === 'avgArea' ? 'mm²' : 'mm';
+
+            if (currentAnalysisMode === 'compare') {
+                const run1Data = tile.runs[run1Id], run2Data = tile.runs[run2Id];
+                if (!run1Data || !run2Data) return;
+                
+                const value1 = run1Data[metric], value2 = run2Data[metric];
+                const change = value2 - value1;
+                const changePercent = value1 !== 0 ? (change / value1) * 100 : 0;
+                
+                tooltip.innerHTML = `
+                    <div class="tooltip-row"><span class="tooltip-label">Grid:</span><span class="tooltip-value">${tile.x}, ${tile.y}</span></div>
+                    <div class="tooltip-row"><span class="tooltip-label">Baseline:</span><span class="tooltip-value">${value1.toFixed(3)} ${unit}</span></div>
+                    <div class="tooltip-row"><span class="tooltip-label">Current:</span><span class="tooltip-value">${value2.toFixed(3)} ${unit}</span></div>
+                    <div class="tooltip-row"><span class="tooltip-label">Change:</span><span class="tooltip-value ${change >= 0 ? 'tooltip-positive' : 'tooltip-negative'}">${change > 0 ? '+' : ''}${change.toFixed(3)} ${unit} (${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%)</span></div>`;
+            } else { // View mode
+                const runData = tile.runs[runId];
+                if (!runData) return;
+
+                const value = runData[metric];
+                tooltip.innerHTML = `
+                    <div class="tooltip-row"><span class="tooltip-label">Grid:</span><span class="tooltip-value">${tile.x}, ${tile.y}</span></div>
+                    <div class="tooltip-row"><span class="tooltip-label">Value:</span><span class="tooltip-value">${value.toFixed(3)} ${unit}</span></div>`;
+            }
+            
+            tooltip.style.opacity = '1';
+            moveTileTooltip(e);
+        }
+        
+        function moveTileTooltip(e) {
+            const tooltip = document.getElementById('tile-tooltip');
+            if (e.originalEvent) {
+                tooltip.style.left = (e.originalEvent.clientX + 15) + 'px';
+                tooltip.style.top = (e.originalEvent.clientY - tooltip.offsetHeight - 10) + 'px';
+            }
+        }
+        
+        function hideTileTooltip() {
+            document.getElementById('tile-tooltip').style.opacity = '0';
+        }
+        
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            beachDetailsPanel.insertBefore(errorDiv, beachDetailsPanel.firstChild);
+            setTimeout(() => { errorDiv.remove(); }, 5000);
+        }
+        
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
